@@ -85,8 +85,8 @@ app.post('/login', async (req, res) => {
         const token = jwt.sign({ 
             id: pessoa.Pk_pessoa, 
             email: pessoa.email }, // Payload
-            SECRET_KEY, // Chave secreta
-            { expiresIn: '1m' } // Tempo de expiração do token
+            secretKey, // Chave secreta
+            { expiresIn: '5m' } // Tempo de expiração do token
         );
         res.status(200).json({ token, message: "Login realizado com sucesso!" });
 
@@ -108,7 +108,7 @@ const autenticaJWT = (req, res, next) => {
 
     const token = authHeader.split(' ')[1]; // O token vem no formato "Bearer <token>"
 
-    jwt.verify(token, SECRET_KEY, (err, usuario) => {
+    jwt.verify(token, secretKey, (err, usuario) => {
         if (err) {
             return res.status(403).json({ error: "Token inválido ou expirado." });
         }
@@ -158,7 +158,7 @@ app.post('/criarDiario', autenticaJWT, async (req, res) => {
 });
 
 //BUSCAR UM DIARIO POR TITULO
-app.get('/listar/diario/:titulo', async (req,res)=>{
+app.get('/listar/diario/:titulo', autenticaJWT, async (req,res)=>{
     const {titulo} = req.params;
 
     try {
@@ -190,6 +190,7 @@ app.put('/editar/:id', async (req, res) => {
         const diario = await Diario.findByPk(descricaoId); 
 
     if (diario) { 
+        console.log("tem diario")
        diario.titulo = titulo; 
        diario.descricao = descricao;
 
@@ -207,7 +208,7 @@ app.put('/editar/:id', async (req, res) => {
 
 
 //DELETAR UM DIARIO - funçao do botão
-app.delete('/lista/diario/excluir/:id', async (req,res)=>{
+app.delete('/lista/diario/excluir/:id',autenticaJWT, async (req,res)=>{
     const { id }= req.params;
 
     try {
@@ -224,10 +225,6 @@ app.delete('/lista/diario/excluir/:id', async (req,res)=>{
     }
     
 })
-
-//autentica
-
-
 
 
 // Inicia o servidor
