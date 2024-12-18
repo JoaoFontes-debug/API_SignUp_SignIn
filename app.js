@@ -4,17 +4,20 @@ const sequelize = require('./databaseConfig');
 const bcrypt =  require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+require('dotenv').config();
+const secretKey = process.env.SECRET_KEY;
+
 const PORT = 3000;
 
-const Pessoa = require('./models/Pessoa');
-const Diario = require('./models/Diario');
+const{ Pessoa, Diario }= require('./models/models');
+
 const { Op } = require('sequelize');
 
 
 app.use(express.json());
 
 //sicroniza a tabelas com os modelos
-sequelize.sync()
+sequelize.sync({force:true})
     .then(() => {
         console.log('Todas as tabelas foram sincronizadas com sucesso');
     })
@@ -57,11 +60,69 @@ app.post('/registro', async (req, res) => {
     }
 });
 
+app.post('/login', async (req, res) => {
+    const { email, senha } = req.body;
+
+    if (!email || !senha) {
+        return res.status(400).json({ error: "Campos obrigatórios: email e senha." });
+    }
+
+    try {
+        // Buscar o usuário pelo email
+        const pessoa = await Pessoa.findOne({ where: { email } });
+
+        if (!pessoa) {
+            return res.status(404).json({ error: "Email ou senha inválidos." });
+        }
+        // Verificar se a senha está correta
+        const senhaCorreta = await bcrypt.compare(senha, pessoa.senha);
+
+        if (!senhaCorreta) {
+            return res.status(401).json({ error: "Email ou senha inválidos." });
+        }
+
+        // Gerar o token JWT
+        const token = jwt.sign({ 
+            id: pessoa.Pk_pessoa, 
+            email: pessoa.email }, // Payload
+            SECRET_KEY, // Chave secreta
+            { expiresIn: '1m' } // Tempo de expiração do token
+        );
+        res.status(200).json({ token, message: "Login realizado com sucesso!" });
+
+    } catch (error) {
+        console.error("Erro no login:", error.message);
+        res.status(500).json({ error: "Erro no login." });
+
+    }
+
+
+});
+
+const autenticaJWT = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+        return res.status(401).json({ error: "Token não fornecido." });
+    }
+
+    const token = authHeader.split(' ')[1]; // O token vem no formato "Bearer <token>"
+
+    jwt.verify(token, SECRET_KEY, (err, usuario) => {
+        if (err) {
+            return res.status(403).json({ error: "Token inválido ou expirado." });
+        }
+
+        req.usuario = usuario; // Anexa o usuário autenticado à requisição
+        next();
+    });
+};
+
 
 //////////////////ROTAS DIARIOS///////////////////////
 
 //LISTA DIARIOS
-app.get('/listarDiarios', async (req, res) => {
+app.get('/listarDiarios', autenticaJWT, async (req, res) => {
     try {
         const diarios = await Diario.findAll({
             attributes: ['titulo', 'descricao'],
@@ -75,16 +136,20 @@ app.get('/listarDiarios', async (req, res) => {
 });
 
 //CRIA DIARIOS
-app.post('/criarDiario', async (req, res) => {
-    const { titulo, descricao} = req.body; 
-    
+app.post('/criarDiario', autenticaJWT, async (req, res) => {
+    const {titulo, descricao} = req.body; 
+
     if (!titulo || !descricao) {
         return res.status(400).json({ error: "Campos obrigatórios: titulo e descrição." });
     }
 
     try {
-        const diario = await Diario.create({ titulo, descricao });
-        res.status(201).json({msg:`Um diario acabou de ser criado`});
+        const diario = await Diario.create({
+            titulo, 
+            descricao,
+            Fk_pessoa: req.usuario.id
+        });
+        res.status(201).json({message:`O diario ${diario.titulo} acabou de ser criado`});
 
     } catch (error) {
         console.error("Erro ao criar diario: ", error.message);
@@ -114,6 +179,33 @@ app.get('/listar/diario/:titulo', async (req,res)=>{
     }
 })
 
+//EDITA O DIARIO
+app.put('/editar/:id', async (req, res) => { 
+    //dados vindos do formulario
+    const { titulo, descricao } = req.body; 
+
+    const descricaoId = req.params.id; 
+    
+    try { 
+        const diario = await Diario.findByPk(descricaoId); 
+
+    if (diario) { 
+       diario.titulo = titulo; 
+       diario.descricao = descricao;
+
+       await diario.save(); 
+       res.json(diario); 
+    } 
+    else { 
+        res.status(404).send('Erro ao atualizar o diario'); 
+    } 
+
+} catch (error) { 
+    console.error(error); 
+    res.status(500).send('Erro ao atualizar o diario'); 
+} });
+
+
 //DELETAR UM DIARIO - funçao do botão
 app.delete('/lista/diario/excluir/:id', async (req,res)=>{
     const { id }= req.params;
@@ -122,16 +214,19 @@ app.delete('/lista/diario/excluir/:id', async (req,res)=>{
         const diario = await Diario.findByPk(id);
 
         if(diario){
-            await diario.destroy()
-            res.status(200).json({mensagem:"Excluido com sucesso"})
+            await diario.destroy();
+            res.status(200).json({message:`Diário ${diario.titulo} excluido com sucesso`})
         }else{
-            res.status(404).json({mensagem:"diario não encontrado"})
+            res.status(404).json({message:"diario não encontrado"})
         }
     } catch (error) {
         res.status(500).json({error:error.message})
     }
     
 })
+
+//autentica
+
 
 
 
