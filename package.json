@@ -26,8 +26,10 @@
   "homepage": "https://github.com/JoaoFontes-debug/API_SignUp_SignIn#readme",
   "dependencies": {
     "axios": "^1.7.9",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
     "sequelize": "^6.37.5",
     "sqlite3": "^5.1.7"
   },
