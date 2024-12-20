@@ -1,23 +1,24 @@
 const express = require('express');
-const app = express();
 const sequelize = require('./databaseConfig');
 const bcrypt =  require('bcrypt');
 const jwt = require('jsonwebtoken');
-
 require('dotenv').config();
-const secretKey = process.env.SECRET_KEY;
+const cors = require('cors');
+const { Op } = require('sequelize');
 
+const app = express();
+
+const secretKey = process.env.SECRET_KEY;
 const PORT = 3000;
 
 const{ Pessoa, Diario }= require('./models/models');
 
-const { Op } = require('sequelize');
 
-
+app.use(cors());
 app.use(express.json());
 
 //sicroniza a tabelas com os modelos
-sequelize.sync({force:true})
+sequelize.sync()
     .then(() => {
         console.log('Todas as tabelas foram sincronizadas com sucesso');
     })
@@ -39,7 +40,7 @@ app.get('/', async (req, res) => {
 
 
 // CRIA CONTA
-app.post('/registro', async (req, res) => {
+app.post('/cadastro', async (req, res) => {
     const { nome, email, senha } = req.body; 
     
     if (!nome || !email || !senha) {
@@ -53,12 +54,13 @@ app.post('/registro', async (req, res) => {
 
     try {
         const pessoa = await Pessoa.create({ nome, email, senha:hashedSenha });
-        res.status(201).json({message:`${pessoa} acabou de ser criada`});
+        res.status(201).json({message:`O usuário${pessoa.nome} acabou de ser criado`});
     } catch (error) {
         console.error("Erro ao criar pessoas: ", error.message);
         res.status(500).json({ error: "Erro ao criar pessoa." });
     }
 });
+
 
 app.post('/login', async (req, res) => {
     const { email, senha } = req.body;
@@ -88,7 +90,7 @@ app.post('/login', async (req, res) => {
             secretKey, // Chave secreta
             { expiresIn: '5m' } // Tempo de expiração do token
         );
-        res.status(200).json({ token, message: "Login realizado com sucesso!" });
+        res.status(200).json({ token, id: pessoa.Pk_pessoa, message: "Login realizado com sucesso!" });
 
     } catch (error) {
         console.error("Erro no login:", error.message);
