@@ -102,40 +102,40 @@ app.post('/login', async (req, res) => {
 });
 
 const autenticaJWT = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-        return res.status(401).json({ error: "Token não fornecido." });
+    const token = req.header('Authorization').replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).send({ error: 'Token não fornecido' });
     }
-
-    const token = authHeader.split(' ')[1]; // O token vem no formato "Bearer <token>"
-
-    jwt.verify(token, secretKey, (err, usuario) => {
-        if (err) {
-            return res.status(403).json({ error: "Token inválido ou expirado." });
-        }
-
-        req.usuario = usuario; // Anexa o usuário autenticado à requisição
-        next();
-    });
-};
-
+  
+    try {
+      const decoded = jwt.verify(token, secretKey);
+      req.usuario = decoded;
+      next();
+    } catch (error) {
+      res.status(401).send({ error: 'Token inválido' });
+    }
+  };
 
 //////////////////ROTAS DIARIOS///////////////////////
 
-//LISTA DIARIOS
+// LISTA DIARIOS
 app.get('/listarDiarios', autenticaJWT, async (req, res) => {
     try {
         const diarios = await Diario.findAll({
             attributes: ['titulo', 'descricao'],
+            where: {
+                Fk_pessoa: req.usuario.id, // Filtra pelo ID do usuário autenticado
+            },
         });
         res.json({ diarios });
-
     } catch (error) {
-        console.error("Erro ao selecionar diarios: ", error.message);
-        res.status(500).send("<h1> Erro ao gerar a página de pessoas</h1>");
+        console.error("Erro ao selecionar diários: ", error.message);
+        res.status(500).send("<h1>Erro ao gerar a página de diários</h1>");
     }
 });
+
+
+
 
 //CRIA DIARIOS
 app.post('/criarDiario', autenticaJWT, async (req, res) => {
@@ -181,52 +181,51 @@ app.get('/listar/diario/:titulo', autenticaJWT, async (req,res)=>{
     }
 })
 
-//EDITA O DIARIO
-app.put('/editar/:id', async (req, res) => { 
-    //dados vindos do formulario
-    const { titulo, descricao } = req.body; 
+app.put('/editarDiario/:id', autenticaJWT, async (req, res) => {
+    const { titulo, descricao } = req.body;
+    const { id } = req.params ;
 
-    const descricaoId = req.params.id; 
-    
-    try { 
-        const diario = await Diario.findByPk(descricaoId); 
+    if (!titulo || !descricao) {
+        return res.status(400).json({ message: "Título e descrição são obrigatórios." });
+    }
 
-    if (diario) { 
-        console.log("tem diario")
-       diario.titulo = titulo; 
-       diario.descricao = descricao;
+    try {
+        const diario = await Diario.findOne({ where: { id, Fk_pessoa: req.usuario.id } });
 
-       await diario.save(); 
-       res.json(diario); 
-    } 
-    else { 
-        res.status(404).send('Erro ao atualizar o diario'); 
-    } 
+        if (!diario) {
+            return res.status(404).json({ message: "Diário não encontrado ou você não tem permissão para editá-lo." });
+        }
 
-} catch (error) { 
-    console.error(error); 
-    res.status(500).send('Erro ao atualizar o diario'); 
-} });
+        diario.titulo = titulo;
+        diario.descricao = descricao;
+        await diario.save();
+
+        return res.status(200).json({ message: "Diário atualizado com sucesso.", diario });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Erro ao atualizar o diário." });
+    }
+});
 
 
 //DELETAR UM DIARIO - funçao do botão
-app.delete('/lista/diario/excluir/:id',autenticaJWT, async (req,res)=>{
-    const { id }= req.params;
+app.delete('/deletarDiario/:id', autenticaJWT, async (req, res) => {
+    const { id } = req.params;
 
     try {
         const diario = await Diario.findByPk(id);
 
-        if(diario){
+        if (diario) {
             await diario.destroy();
-            res.status(200).json({message:`Diário ${diario.titulo} excluido com sucesso`})
-        }else{
-            res.status(404).json({message:"diario não encontrado"})
+            return res.status(200).json({ message: `Diário "${diario.titulo}" excluído com sucesso.` });
+        } else {
+            return res.status(404).json({ message: "Diário não encontrado." });
         }
     } catch (error) {
-        res.status(500).json({error:error.message})
+        console.error(error);
+        return res.status(500).json({ message: "Erro ao excluir o diário." });
     }
-    
-})
+});
 
 
 // Inicia o servidor
