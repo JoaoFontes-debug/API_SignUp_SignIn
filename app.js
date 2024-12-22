@@ -49,12 +49,15 @@ app.post('/cadastro', async (req, res) => {
 
     //cria uma sequencia aleatoria
     const salt = await bcrypt.genSalt(10);
+    //TESTE
+    console.log(salt);
     //junta a senha digitada no formulario e o salt
     const hashedSenha = await bcrypt.hash(senha, salt);
-
+    //TESTE
+    console.log(hashedSenha);
     try {
         const pessoa = await Pessoa.create({ nome, email, senha:hashedSenha });
-        res.status(201).json({message:`O usuário${pessoa.nome} acabou de ser criado`});
+        res.status(201).json({message:`O usuário ${ pessoa.nome} acabou de ser criado`});
     } catch (error) {
         console.error("Erro ao criar pessoas: ", error.message);
         res.status(500).json({ error: "Erro ao criar pessoa." });
@@ -72,12 +75,15 @@ app.post('/login', async (req, res) => {
     try {
         // Buscar o usuário pelo email
         const pessoa = await Pessoa.findOne({ where: { email } });
-
+        //TESTE
+        console.log(pessoa);
         if (!pessoa) {
             return res.status(404).json({ error: "Email ou senha inválidos." });
         }
         // Verificar se a senha está correta
         const senhaCorreta = await bcrypt.compare(senha, pessoa.senha);
+        //TESTE
+        console.log("senha correta", senhaCorreta);
 
         if (!senhaCorreta) {
             return res.status(401).json({ error: "Email ou senha inválidos." });
@@ -86,9 +92,9 @@ app.post('/login', async (req, res) => {
         // Gerar o token JWT
         const token = jwt.sign({ 
             id: pessoa.Pk_pessoa, 
-            email: pessoa.email }, // Payload
-            secretKey, // Chave secreta
-            { expiresIn: '5m' } // Tempo de expiração do token
+            email: pessoa.email }, 
+            secretKey, 
+            { expiresIn: '30m' } 
         );
         res.status(200).json({ token, id: pessoa.Pk_pessoa, message: "Login realizado com sucesso!" });
 
@@ -102,13 +108,21 @@ app.post('/login', async (req, res) => {
 });
 
 const autenticaJWT = (req, res, next) => {
+    const TESTE = req.header('Authorization');
+    //TESTE
+    console.log("req.heder: ", TESTE);
     const token = req.header('Authorization').replace('Bearer ', '');
+    //TESTE
+    console.log("token puro:", token);
     if (!token) {
       return res.status(401).send({ error: 'Token não fornecido' });
     }
   
     try {
       const decoded = jwt.verify(token, secretKey);
+      //TESTE
+        console.log("token decodificado", decoded);
+
       req.usuario = decoded;
       next();
     } catch (error) {
@@ -151,6 +165,8 @@ app.post('/criarDiario', autenticaJWT, async (req, res) => {
             descricao,
             Fk_pessoa: req.usuario.id
         });
+        //TESTE
+        console.log(diario);
         res.status(201).json({message:`O diario ${diario.titulo} acabou de ser criado`});
 
     } catch (error) {
@@ -162,6 +178,8 @@ app.post('/criarDiario', autenticaJWT, async (req, res) => {
 //BUSCAR UM DIARIO POR TITULO
 app.get('/listar/diario/:titulo', autenticaJWT, async (req,res)=>{
     const {titulo} = req.params;
+    //TESTE
+    console.log(req.params);
 
     try {
         //busca a palavra em titulo e descrição
@@ -173,6 +191,11 @@ app.get('/listar/diario/:titulo', autenticaJWT, async (req,res)=>{
                 ]
             }
         });
+
+        if(diario.length === 0){
+            return res.status(404).json({message: "Diário não encontrado."});
+        }
+
         res.status(200).json(diario);
 
     } catch (error) {
@@ -181,16 +204,18 @@ app.get('/listar/diario/:titulo', autenticaJWT, async (req,res)=>{
     }
 })
 
-app.put('/editarDiario/:id', autenticaJWT, async (req, res) => {
+app.put('/editarDiario/:Pk_diario', autenticaJWT, async (req, res) => {
     const { titulo, descricao } = req.body;
-    const { id } = req.params ;
-
+    const { Pk_diario } = req.params ;
+    //TESTE
+    console.log("body no editar diario", req.body);
+    console.log("params no editar diario", req.params);
     if (!titulo || !descricao) {
         return res.status(400).json({ message: "Título e descrição são obrigatórios." });
     }
 
     try {
-        const diario = await Diario.findOne({ where: { id, Fk_pessoa: req.usuario.id } });
+        const diario = await Diario.findOne({ where: { Pk_diario, Fk_pessoa: req.usuario.id } });
 
         if (!diario) {
             return res.status(404).json({ message: "Diário não encontrado ou você não tem permissão para editá-lo." });
@@ -209,11 +234,11 @@ app.put('/editarDiario/:id', autenticaJWT, async (req, res) => {
 
 
 //DELETAR UM DIARIO - funçao do botão
-app.delete('/deletarDiario/:id', autenticaJWT, async (req, res) => {
-    const { id } = req.params;
+app.delete('/deletarDiario/:Pk_diario', autenticaJWT, async (req, res) => {
+    const { Pk_diario } = req.params;
 
     try {
-        const diario = await Diario.findByPk(id);
+        const diario = await Diario.findOne({where:{ Pk_diario, Fk_pessoa: req.usuario.id }});
 
         if (diario) {
             await diario.destroy();
